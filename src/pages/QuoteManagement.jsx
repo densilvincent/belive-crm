@@ -10,7 +10,6 @@ import EmptyState from '../components/common/EmptyState'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import Modal from '../components/common/Modal'
 import ConfirmTripForm from '../components/forms/ConfirmTripForm'
-import { buildWhatsAppLink } from '../lib/whatsapp'
 
 export default function QuoteManagement() {
   const { data: trips, loading, update: updateTrip } = useTrips()
@@ -19,6 +18,7 @@ export default function QuoteManagement() {
   const { data: itineraries } = useItineraries()
   const [confirmingTrip, setConfirmingTrip] = useState(null)
   const [generatingPdfId, setGeneratingPdfId] = useState(null)
+  const [sharingId, setSharingId] = useState(null)
 
   const driverById = (id) => drivers.find((d) => d.id === id)
   const hotelById = (id) => hotels.find((h) => h.id === id)
@@ -55,6 +55,30 @@ export default function QuoteManagement() {
     }
   }
 
+  const handleShareWhatsApp = async (trip) => {
+    setSharingId(trip.id)
+    try {
+      const { shareQuoteOnWhatsApp } = await import('../lib/shareQuote')
+      const { mode } = await shareQuoteOnWhatsApp({
+        trip,
+        itinerary: itineraryById(trip.itinerary_id),
+        hotel: hotelById(trip.hotel_assigned) || hotelById(trip.houseboat_assigned),
+        driver: driverById(trip.driver_assigned),
+      })
+      if (mode === 'shared') {
+        await updateTrip(trip.id, { pdf_quote_generated: true })
+        toast.success('Quote shared')
+      } else if (mode === 'fallback') {
+        await updateTrip(trip.id, { pdf_quote_generated: true })
+        toast.success('PDF downloaded — attach it in the WhatsApp chat that just opened')
+      }
+    } catch (err) {
+      toast.error(err.message || 'Could not share quote')
+    } finally {
+      setSharingId(null)
+    }
+  }
+
   if (loading) return <LoadingSpinner />
 
   return (
@@ -87,9 +111,13 @@ export default function QuoteManagement() {
                   >
                     {generatingPdfId === trip.id ? '…' : 'View PDF'}
                   </button>
-                  <a className="btn-outline text-xs py-2 min-h-[40px]" href={buildWhatsAppLink(trip)} target="_blank" rel="noreferrer">
-                    WhatsApp
-                  </a>
+                  <button
+                    className="btn-outline text-xs py-2 min-h-[40px]"
+                    disabled={sharingId === trip.id}
+                    onClick={() => handleShareWhatsApp(trip)}
+                  >
+                    {sharingId === trip.id ? '…' : 'WhatsApp'}
+                  </button>
                   <button className="btn-outline text-xs py-2 min-h-[40px]" onClick={() => markSent(trip)} disabled={trip.trip_status === 'Quote-Sent'}>
                     Mark Sent
                   </button>
