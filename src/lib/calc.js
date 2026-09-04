@@ -1,16 +1,19 @@
 // Central profit-calculation logic — keep the whole app consistent with the
 // business rule that hotel/houseboat commissions never enter trip_cost.
+// Fuel is NOT a per-trip cost: a full tank covers many short trips or 1-2
+// long ones, and refueling happens on its own schedule, not per booking — it
+// lives in daily_overhead_expenses instead (see fuelCost() below).
 export function tripCost(trip) {
-  return (
-    Number(trip.driver_commission || 0) +
-    Number(trip.fuel_cost || 0) +
-    Number(trip.cab_rental_charge || 0) +
-    Number(trip.external_driver_charge || 0)
-  )
+  return Number(trip.driver_commission || 0) + Number(trip.cab_rental_charge || 0) + Number(trip.external_driver_charge || 0)
 }
 
 export function tripProfit(trip) {
   return Number(trip.amount_received || 0) - tripCost(trip)
+}
+
+// A refuel is billed as liters × price/liter, matching the actual pump receipt.
+export function fuelCost(expense) {
+  return Number(expense.fuel_liters || 0) * Number(expense.fuel_cost_per_liter || 0)
 }
 
 export function dailyOverheadTotal(expense) {
@@ -19,7 +22,8 @@ export function dailyOverheadTotal(expense) {
     Number(expense.spare_parts_cost || 0) +
     Number(expense.washing_cost || 0) +
     Number(expense.insurance_daily_allocation || 0) +
-    Number(expense.other_overhead || 0)
+    Number(expense.other_overhead || 0) +
+    fuelCost(expense)
   )
 }
 

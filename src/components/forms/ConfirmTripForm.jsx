@@ -14,7 +14,6 @@ export default function ConfirmTripForm({ trip, onDone, onCancel }) {
     hotel_assigned: trip.hotel_assigned || '',
     houseboat_assigned: trip.houseboat_assigned || '',
     driver_commission: trip.driver_commission ?? '',
-    fuel_cost: trip.fuel_cost ?? '',
     cab_rental_charge: trip.cab_rental_charge ?? '',
     external_driver_charge: trip.external_driver_charge ?? '',
     amount_received: trip.amount_received ?? '',
@@ -35,7 +34,6 @@ export default function ConfirmTripForm({ trip, onDone, onCancel }) {
         hotel_assigned: form.hotel_assigned || null,
         houseboat_assigned: form.houseboat_assigned || null,
         driver_commission: num(form.driver_commission),
-        fuel_cost: num(form.fuel_cost),
         cab_rental_charge: num(form.cab_rental_charge),
         external_driver_charge: num(form.external_driver_charge),
         amount_received: num(form.amount_received) ?? 0,
@@ -96,10 +94,6 @@ export default function ConfirmTripForm({ trip, onDone, onCancel }) {
         <div>
           <label className="label">Driver Commission (₹)</label>
           <input type="number" className="input-field" value={form.driver_commission} onChange={set('driver_commission')} />
-        </div>
-        <div>
-          <label className="label">Fuel Cost (₹)</label>
-          <input type="number" className="input-field" value={form.fuel_cost} onChange={set('fuel_cost')} />
         </div>
         <div>
           <label className="label">Cab Rental (₹)</label>

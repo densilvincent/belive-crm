@@ -157,7 +157,6 @@ create table if not exists trips (
   driver_commission numeric(12, 2),
   hotel_assigned uuid references hotels_houseboats(id),
   houseboat_assigned uuid references hotels_houseboats(id),
-  fuel_cost numeric(12, 2),
   cab_rental_charge numeric(12, 2),
   external_driver_charge numeric(12, 2),
   notes text,
@@ -251,6 +250,11 @@ create table if not exists daily_overhead_expenses (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.users(id),
   date date not null default current_date,
+  -- A refuel doesn't happen per trip (a full tank covers several short
+  -- trips, or 1-2 long ones) - it's billed as liters x price/liter,
+  -- matching the pump receipt, on whatever day it actually happens.
+  fuel_liters numeric(10, 2),
+  fuel_cost_per_liter numeric(10, 2),
   maintenance_cost numeric(12, 2) default 0,
   spare_parts_cost numeric(12, 2) default 0,
   washing_cost numeric(12, 2) default 0,

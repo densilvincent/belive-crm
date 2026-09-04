@@ -1,21 +1,22 @@
 import { useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { sum } from '../../lib/calc'
+import { fuelCost, sum } from '../../lib/calc'
 import { formatCurrency, exportToCSV } from '../../lib/formatters'
 import { CHART_COLORS } from '../../lib/constants'
 import EmptyState from '../common/EmptyState'
 
 const CATEGORIES = [
-  { key: 'maintenance_cost', label: 'Maintenance' },
-  { key: 'spare_parts_cost', label: 'Spare Parts' },
-  { key: 'washing_cost', label: 'Washing' },
-  { key: 'insurance_daily_allocation', label: 'Insurance' },
-  { key: 'other_overhead', label: 'Other' },
+  { label: 'Fuel', value: fuelCost },
+  { label: 'Maintenance', value: (o) => o.maintenance_cost },
+  { label: 'Spare Parts', value: (o) => o.spare_parts_cost },
+  { label: 'Washing', value: (o) => o.washing_cost },
+  { label: 'Insurance', value: (o) => o.insurance_daily_allocation },
+  { label: 'Other', value: (o) => o.other_overhead },
 ]
 
 export default function ExpenseBreakdownReport({ overheads }) {
   const rows = useMemo(
-    () => CATEGORIES.map((c) => ({ label: c.label, value: sum(overheads, (o) => o[c.key]) })).filter((r) => r.value > 0),
+    () => CATEGORIES.map((c) => ({ label: c.label, value: sum(overheads, c.value) })).filter((r) => r.value > 0),
     [overheads]
   )
 

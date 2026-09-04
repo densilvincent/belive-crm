@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useOverhead } from '../hooks/useOverhead'
 import { formatCurrency, formatDate, startOfMonthISO, endOfMonthISO, exportToCSV } from '../lib/formatters'
-import { dailyOverheadTotal, sum } from '../lib/calc'
+import { dailyOverheadTotal, fuelCost, sum } from '../lib/calc'
 import { CHART_COLORS } from '../lib/constants'
 import DateRangePicker from '../components/common/DateRangePicker'
 import EmptyState from '../components/common/EmptyState'
@@ -12,11 +12,12 @@ import Icon from '../components/common/Icon'
 import OverheadForm from '../components/forms/OverheadForm'
 
 const CATEGORIES = [
-  { key: 'maintenance_cost', label: 'Maintenance' },
-  { key: 'spare_parts_cost', label: 'Spare Parts' },
-  { key: 'washing_cost', label: 'Washing' },
-  { key: 'insurance_daily_allocation', label: 'Insurance' },
-  { key: 'other_overhead', label: 'Other' },
+  { label: 'Fuel', value: fuelCost },
+  { label: 'Maintenance', value: (e) => e.maintenance_cost },
+  { label: 'Spare Parts', value: (e) => e.spare_parts_cost },
+  { label: 'Washing', value: (e) => e.washing_cost },
+  { label: 'Insurance', value: (e) => e.insurance_daily_allocation },
+  { label: 'Other', value: (e) => e.other_overhead },
 ]
 
 export default function DailyExpenses() {
@@ -32,13 +33,16 @@ export default function DailyExpenses() {
   )
 
   const monthlyTotal = sum(filtered, dailyOverheadTotal)
-  const pieData = CATEGORIES.map((c) => ({ name: c.label, value: sum(filtered, (e) => e[c.key]) })).filter((d) => d.value > 0)
+  const pieData = CATEGORIES.map((c) => ({ name: c.label, value: sum(filtered, c.value) })).filter((d) => d.value > 0)
 
   const handleExport = () => {
     exportToCSV(
       `belive-expenses-${start}-to-${end}.csv`,
       filtered.map((e) => ({
         date: e.date,
+        fuel_liters: e.fuel_liters,
+        fuel_cost_per_liter: e.fuel_cost_per_liter,
+        fuel_total: fuelCost(e),
         maintenance: e.maintenance_cost,
         spare_parts: e.spare_parts_cost,
         washing: e.washing_cost,
@@ -97,6 +101,7 @@ export default function DailyExpenses() {
                 <p className="font-bold text-teal">{formatCurrency(dailyOverheadTotal(e))}</p>
               </div>
               <p className="text-xs text-gray-400">
+                {fuelCost(e) > 0 && <>Fuel {formatCurrency(fuelCost(e))} ({e.fuel_liters}L) · </>}
                 Maint {formatCurrency(e.maintenance_cost)} · Parts {formatCurrency(e.spare_parts_cost)} · Wash{' '}
                 {formatCurrency(e.washing_cost)} · Ins {formatCurrency(e.insurance_daily_allocation)} · Other{' '}
                 {formatCurrency(e.other_overhead)}
