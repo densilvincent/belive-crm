@@ -9,7 +9,12 @@ export function formatCurrency(amount) {
 
 export function formatDate(dateStr) {
   if (!dateStr) return '—'
-  const d = new Date(dateStr)
+  // Plain "YYYY-MM-DD" values (every `date` column in this app) represent a
+  // calendar date, not an instant — `new Date("2026-09-04")` parses it as
+  // UTC midnight, which then rolls back a day once displayed in any
+  // timezone behind UTC. Build the Date from local year/month/day instead.
+  const isoDateOnly = /^\d{4}-\d{2}-\d{2}$/
+  const d = isoDateOnly.test(dateStr) ? new Date(...dateStr.split('-').map((n, i) => (i === 1 ? Number(n) - 1 : Number(n)))) : new Date(dateStr)
   if (Number.isNaN(d.getTime())) return dateStr
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }

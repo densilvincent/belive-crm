@@ -36,7 +36,7 @@ export default function Settings() {
       <section className="card space-y-2">
         <h2 className="font-display font-semibold text-sm text-gray-500">Login Info</h2>
         <Row label="Email" value={user?.email} />
-        <Row label="Role" value={role} />
+        <Row label="Role" value={role} capitalize />
         <Row label="Last Sign In" value={formatDateTime(user?.last_sign_in_at)} />
       </section>
 
@@ -104,11 +104,11 @@ export default function Settings() {
   )
 }
 
-function Row({ label, value }) {
+function Row({ label, value, capitalize }) {
   return (
     <div className="flex justify-between text-sm">
       <span className="text-gray-400">{label}</span>
-      <span className="text-gray-800 font-medium capitalize">{value || '—'}</span>
+      <span className={`text-gray-800 font-medium ${capitalize ? 'capitalize' : ''}`}>{value || '—'}</span>
     </div>
   )
 }
