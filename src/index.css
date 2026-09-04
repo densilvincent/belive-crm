@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-bggray-light text-gray-800 font-body antialiased;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display text-gray-800;
+  }
+  input, select, textarea {
+    font-size: 16px; /* prevents iOS Safari auto-zoom on focus */
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg font-display font-semibold text-sm min-h-touch px-4 transition active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-teal text-white hover:bg-teal-dark w-full sm:w-auto;
+  }
+  .btn-secondary {
+    @apply btn bg-gold text-white hover:brightness-95 w-full sm:w-auto;
+  }
+  .btn-outline {
+    @apply btn border border-teal text-teal bg-white hover:bg-teal/5 w-full sm:w-auto;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 w-full sm:w-auto;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-4;
+  }
+  .input-field {
+    @apply w-full min-h-touch rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal focus:border-teal;
+  }
+  .label {
+    @apply block text-xs font-body font-medium text-gray-500 mb-1;
+  }
+  .badge {
+    @apply inline-block rounded-full px-2.5 py-1 text-[11px] font-bold text-white leading-none whitespace-nowrap;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
