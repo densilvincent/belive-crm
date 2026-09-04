@@ -38,17 +38,25 @@ export default function QuoteManagement() {
 
   const handleGeneratePdf = async (trip) => {
     setGeneratingPdfId(trip.id)
+    // Open the tab synchronously, before any await - PDF generation is async,
+    // and by the time it finishes some mobile browsers (iOS Safari) no longer
+    // treat a window.open() as part of the original click gesture and silently
+    // drop it. Filling in an already-open tab sidesteps that entirely.
+    const pdfWindow = window.open('', '_blank')
     try {
-      const { downloadQuotePDF } = await import('../lib/pdfGenerator')
-      await downloadQuotePDF({
-        trip,
-        itinerary: itineraryById(trip.itinerary_id),
-        hotel: hotelById(trip.hotel_assigned) || hotelById(trip.houseboat_assigned),
-        driver: driverById(trip.driver_assigned),
-      })
+      const { openQuotePDF } = await import('../lib/pdfGenerator')
+      await openQuotePDF(
+        {
+          trip,
+          itinerary: itineraryById(trip.itinerary_id),
+          hotel: hotelById(trip.hotel_assigned) || hotelById(trip.houseboat_assigned),
+          driver: driverById(trip.driver_assigned),
+        },
+        pdfWindow
+      )
       await updateTrip(trip.id, { pdf_quote_generated: true })
-      toast.success('Quote PDF downloaded')
     } catch (err) {
+      pdfWindow?.close()
       toast.error(err.message || 'Could not generate PDF')
     } finally {
       setGeneratingPdfId(null)
@@ -57,6 +65,7 @@ export default function QuoteManagement() {
 
   const handleShareWhatsApp = async (trip) => {
     setSharingId(trip.id)
+    const fallbackWindow = window.open('', '_blank')
     try {
       const { shareQuoteOnWhatsApp } = await import('../lib/shareQuote')
       const { mode } = await shareQuoteOnWhatsApp({
@@ -64,6 +73,7 @@ export default function QuoteManagement() {
         itinerary: itineraryById(trip.itinerary_id),
         hotel: hotelById(trip.hotel_assigned) || hotelById(trip.houseboat_assigned),
         driver: driverById(trip.driver_assigned),
+        fallbackWindow,
       })
       if (mode === 'shared') {
         await updateTrip(trip.id, { pdf_quote_generated: true })
@@ -71,8 +81,11 @@ export default function QuoteManagement() {
       } else if (mode === 'fallback') {
         await updateTrip(trip.id, { pdf_quote_generated: true })
         toast.success('PDF downloaded — attach it in the WhatsApp chat that just opened')
+      } else {
+        fallbackWindow?.close()
       }
     } catch (err) {
+      fallbackWindow?.close()
       toast.error(err.message || 'Could not share quote')
     } finally {
       setSharingId(null)

@@ -241,9 +241,21 @@ export async function generateQuotePDF({ trip, itinerary, hotel, driver }) {
   return doc
 }
 
-export async function downloadQuotePDF(args) {
+// Renders the PDF into a browser tab that was opened *synchronously* by the
+// caller (before any await). jsPDF's `.save()` silently does nothing on some
+// mobile browsers (notably iOS Safari) once the async PDF generation has
+// moved the callback outside the original click's trusted-gesture window —
+// opening the tab first, then filling it in once the PDF is ready, sidesteps
+// that entirely. Falls back to a plain download if no window was passed (or
+// it got closed/blocked).
+export async function openQuotePDF(args, targetWindow) {
   const doc = await generateQuotePDF(args)
-  doc.save(`belive-quote-${args.trip.quote_id || args.trip.id}.pdf`)
+  const blobUrl = doc.output('bloburl')
+  if (targetWindow && !targetWindow.closed) {
+    targetWindow.location.href = blobUrl
+  } else {
+    doc.save(`belive-quote-${args.trip.quote_id || args.trip.id}.pdf`)
+  }
 }
 
 export async function getQuotePDFBlob(args) {
