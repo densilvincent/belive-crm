@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 // Shared CRUD + realtime hook. RLS on the Postgres side already scopes rows
@@ -8,6 +8,14 @@ export function useSupabaseTable(table, { orderBy = 'created_at', ascending = fa
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Multiple components often use the same table hook at once (e.g. a page's
+  // list view plus a form modal that only needs insert/update). Supabase
+  // Realtime channels are keyed by topic name — reusing `realtime:${table}`
+  // across concurrent instances makes the second `.subscribe()` throw
+  // uncaught ("cannot add postgres_changes callbacks... after subscribe()"),
+  // which crashes the whole React tree. A per-instance id keeps channels
+  // independent.
+  const instanceId = useId()
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -24,11 +32,11 @@ export function useSupabaseTable(table, { orderBy = 'created_at', ascending = fa
     refetch()
     if (!realtime) return
     const channel = supabase
-      .channel(`realtime:${table}`)
+      .channel(`realtime:${table}:${instanceId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table }, () => refetch())
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [table, refetch, realtime])
+  }, [table, refetch, realtime, instanceId])
 
   const insert = useCallback(
     async (row) => {
