@@ -7,6 +7,8 @@ import Layout from './components/layout/Layout'
 import LoadingSpinner from './components/common/LoadingSpinner'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import ConfigError from './pages/ConfigError'
+import { isSupabaseConfigured } from './lib/supabaseClient'
 
 // Route-level code splitting keeps the initial mobile payload small — only the
 // login + dashboard bundle loads on first paint; recharts/jspdf-heavy tabs
@@ -23,6 +25,8 @@ const Reports = lazy(() => import('./pages/Reports'))
 const Settings = lazy(() => import('./pages/Settings'))
 
 export default function App() {
+  if (!isSupabaseConfigured) return <ConfigError />
+
   return (
     <BrowserRouter>
       <AuthProvider>

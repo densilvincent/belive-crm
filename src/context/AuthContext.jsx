@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(isSupabaseConfigured)
 
   const loadProfile = useCallback(async (userId) => {
     if (!userId) {
@@ -23,6 +23,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
+    if (!isSupabaseConfigured) return
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       loadProfile(session?.user?.id).finally(() => setLoading(false))
