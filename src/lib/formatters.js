@@ -26,25 +26,51 @@ export function formatDateTime(dateStr) {
   return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// Reads a Date object's LOCAL year/month/day (never through toISOString,
+// which converts to UTC first and silently shifts the date by a day for any
+// timezone ahead of UTC, e.g. IST — exactly the bug this used to have).
+function toLocalISODate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function todayISO() {
-  const d = new Date()
-  const tz = d.getTimezoneOffset() * 60000
-  return new Date(d - tz).toISOString().slice(0, 10)
+  return toLocalISODate(new Date())
 }
 
 export function startOfMonthISO(date = new Date()) {
-  return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10)
+  return toLocalISODate(new Date(date.getFullYear(), date.getMonth(), 1))
 }
 
 export function endOfMonthISO(date = new Date()) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10)
+  return toLocalISODate(new Date(date.getFullYear(), date.getMonth() + 1, 0))
 }
 
 export function lastMonthRange() {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const end = new Date(now.getFullYear(), now.getMonth(), 0)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  return { start: toLocalISODate(start), end: toLocalISODate(end) }
+}
+
+function mondayOf(date) {
+  const day = (date.getDay() + 6) % 7 // 0 = Monday
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() - day)
+}
+
+export function thisWeekRange() {
+  const monday = mondayOf(new Date())
+  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
+  return { start: toLocalISODate(monday), end: toLocalISODate(sunday) }
+}
+
+export function lastWeekRange() {
+  const thisMonday = mondayOf(new Date())
+  const lastMonday = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7)
+  const lastSunday = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 1)
+  return { start: toLocalISODate(lastMonday), end: toLocalISODate(lastSunday) }
 }
 
 export function exportToCSV(filename, rows) {

@@ -11,10 +11,11 @@ import { useDrivers } from '../hooks/useDrivers'
 import { useHotels } from '../hooks/useHotels'
 import { useItineraries } from '../hooks/useItineraries'
 import { tripCost, tripProfit, dailyOverheadTotal, fuelCost, sum } from '../lib/calc'
-import { formatCurrency, todayISO } from '../lib/formatters'
+import { formatCurrency, startOfMonthISO, endOfMonthISO } from '../lib/formatters'
 import StatusBadge from '../components/common/StatusBadge'
 import ProfitBadge from '../components/common/ProfitBadge'
 import Modal from '../components/common/Modal'
+import DateRangePicker from '../components/common/DateRangePicker'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import EmptyState from '../components/common/EmptyState'
 import LoadingSpinner from '../components/common/LoadingSpinner'
@@ -29,7 +30,10 @@ import CreditCardPaymentForm from '../components/forms/CreditCardPaymentForm'
 
 export default function Dashboard() {
   const { isOwner } = useAuth()
-  const [date, setDate] = useState(todayISO())
+  // Defaults to the current month; toggle to This Week/Last Week/Last Month,
+  // or pick an arbitrary from/to range, via DateRangePicker.
+  const [start, setStart] = useState(startOfMonthISO())
+  const [end, setEnd] = useState(endOfMonthISO())
 
   const { data: trips, loading: tripsLoading, update: updateTrip } = useTrips()
   const { data: commissions, loading: commLoading } = useCommissions()
@@ -52,25 +56,25 @@ export default function Dashboard() {
   const [generatingPdfId, setGeneratingPdfId] = useState(null)
   const [sharingId, setSharingId] = useState(null)
 
-  const todaysTrips = useMemo(() => trips.filter((t) => t.date === date), [trips, date])
-  const todaysCommissions = useMemo(() => commissions.filter((c) => c.date === date), [commissions, date])
-  const todaysInvestments = useMemo(() => investments.filter((i) => i.date === date), [investments, date])
-  const todaysOverhead = useMemo(() => overheads.filter((o) => o.date === date), [overheads, date])
-  const todaysMisc = useMemo(() => miscEntries.filter((m) => m.date === date), [miscEntries, date])
+  const rangeTrips = useMemo(() => trips.filter((r) => r.date >= start && r.date <= end), [trips, start, end])
+  const rangeCommissions = useMemo(() => commissions.filter((r) => r.date >= start && r.date <= end), [commissions, start, end])
+  const rangeInvestments = useMemo(() => investments.filter((r) => r.date >= start && r.date <= end), [investments, start, end])
+  const rangeOverhead = useMemo(() => overheads.filter((r) => r.date >= start && r.date <= end), [overheads, start, end])
+  const rangeMisc = useMemo(() => miscEntries.filter((r) => r.date >= start && r.date <= end), [miscEntries, start, end])
 
-  const quotedTrips = todaysTrips.filter((t) => ['Quote-Generated', 'Quote-Sent'].includes(t.trip_status))
-  const activeTrips = todaysTrips.filter((t) => ['Quote-Confirmed', 'Booked', 'Paid'].includes(t.trip_status))
+  const quotedTrips = rangeTrips.filter((t) => ['Quote-Generated', 'Quote-Sent'].includes(t.trip_status))
+  const activeTrips = rangeTrips.filter((t) => ['Quote-Confirmed', 'Booked', 'Paid'].includes(t.trip_status))
 
-  const tripRevenue = sum(todaysTrips, (t) => t.amount_received)
-  const tripCosts = sum(todaysTrips, tripCost)
-  const commissionTotal = sum(todaysCommissions, (c) => c.commission_amount)
-  const investmentTotal = sum(todaysInvestments, (i) => i.actual_amount_received)
-  const miscIncomeTotal = sum(todaysMisc, (m) => m.misc_income)
+  const tripRevenue = sum(rangeTrips, (t) => t.amount_received)
+  const tripCosts = sum(rangeTrips, tripCost)
+  const commissionTotal = sum(rangeCommissions, (c) => c.commission_amount)
+  const investmentTotal = sum(rangeInvestments, (i) => i.actual_amount_received)
+  const miscIncomeTotal = sum(rangeMisc, (m) => m.misc_income)
   // Dashboard shows top-line activity only — revenue, volume, costs.
   // Net profit / P&L analysis lives in Reports.
   const totalRevenue = tripRevenue + commissionTotal + investmentTotal + miscIncomeTotal
-  const totalBookings = todaysTrips.length
-  const tourPackageCount = todaysTrips.filter((t) => t.trip_type === 'tour-package').length
+  const totalBookings = rangeTrips.length
+  const tourPackageCount = rangeTrips.filter((t) => t.trip_type === 'tour-package').length
   // Card balance, not scoped to the selected day — total fuel ever charged
   // minus total ever paid toward it, since fuel stays "pending" on the card
   // until it's actually paid off, and a payment can be partial or cover
@@ -168,13 +172,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <h1 className="font-display font-bold text-xl">Dashboard</h1>
+      <DateRangePicker start={start} end={end} onChange={(s, e) => { setStart(s); setEnd(e) }} />
+
       {/* Section A: Quick Summary */}
       <section>
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="font-display font-bold text-xl">Today's Dashboard</h1>
-          <input type="date" className="input-field w-auto text-sm py-1.5" value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-
         {loading ? (
           <LoadingSpinner />
         ) : (
@@ -214,11 +216,11 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* Section C: Today's Tour Package Quotes */}
+      {/* Section C: Open quotes in the selected range */}
       <section>
-        <h2 className="font-display font-semibold text-base mb-2">Today's Quotes</h2>
+        <h2 className="font-display font-semibold text-base mb-2">Open Quotes</h2>
         {quotedTrips.length === 0 ? (
-          <EmptyState title="No quotes yet today" />
+          <EmptyState title="No open quotes in this range" />
         ) : (
           <div className="space-y-2">
             {quotedTrips.map((trip) => (
@@ -270,7 +272,7 @@ export default function Dashboard() {
       <section>
         <h2 className="font-display font-semibold text-base mb-2">Active Trips</h2>
         {activeTrips.length === 0 ? (
-          <EmptyState title="No active trips today" />
+          <EmptyState title="No active trips in this range" />
         ) : (
           <div className="space-y-2">
             {activeTrips.map((trip) => (
@@ -313,11 +315,11 @@ export default function Dashboard() {
               <p className="font-bold text-orange-600">{formatCurrency(pendingFuelTotal)}</p>
             </div>
           )}
-          {todaysOverhead.length === 0 ? (
-            <EmptyState title="No overhead logged today" />
+          {rangeOverhead.length === 0 ? (
+            <EmptyState title="No overhead logged in this range" />
           ) : (
             <div className="space-y-2">
-              {todaysOverhead.map((o) => (
+              {rangeOverhead.map((o) => (
                 <div key={o.id} className="card flex items-center justify-between">
                   <p className="text-sm text-gray-600">{o.notes || 'Overhead entry'}</p>
                   <p className="font-bold text-gray-800">{formatCurrency(dailyOverheadTotal(o))}</p>
@@ -329,11 +331,11 @@ export default function Dashboard() {
       )}
 
       {/* Section H: Day-End Summary entries (Owner only) */}
-      {isOwner && todaysMisc.length > 0 && (
+      {isOwner && rangeMisc.length > 0 && (
         <section>
           <h2 className="font-display font-semibold text-base mb-2">Day-End Summary</h2>
           <div className="space-y-2">
-            {todaysMisc.map((m) => (
+            {rangeMisc.map((m) => (
               <div key={m.id} className="card flex items-center justify-between">
                 <p className="text-sm text-gray-600">{m.notes || 'Overall expense/income'}</p>
                 <div className="text-right">
