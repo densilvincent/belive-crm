@@ -63,14 +63,14 @@ export default function Dashboard() {
 
   const tripRevenue = sum(todaysTrips, (t) => t.amount_received)
   const tripCosts = sum(todaysTrips, tripCost)
-  const tripProfitTotal = sum(todaysTrips, tripProfit)
   const commissionTotal = sum(todaysCommissions, (c) => c.commission_amount)
   const investmentTotal = sum(todaysInvestments, (i) => i.actual_amount_received)
-  const overheadTotal = sum(todaysOverhead, dailyOverheadTotal)
-  const miscExpenseTotal = sum(todaysMisc, (m) => m.misc_expense)
   const miscIncomeTotal = sum(todaysMisc, (m) => m.misc_income)
-  const dailyNetProfit =
-    tripProfitTotal - overheadTotal + commissionTotal + investmentTotal + miscIncomeTotal - miscExpenseTotal
+  // Dashboard shows top-line activity only — revenue, volume, costs.
+  // Net profit / P&L analysis lives in Reports.
+  const totalRevenue = tripRevenue + commissionTotal + investmentTotal + miscIncomeTotal
+  const totalBookings = todaysTrips.length
+  const tourPackageCount = todaysTrips.filter((t) => t.trip_type === 'tour-package').length
   // Card balance, not scoped to the selected day — total fuel ever charged
   // minus total ever paid toward it, since fuel stays "pending" on the card
   // until it's actually paid off, and a payment can be partial or cover
@@ -179,17 +179,12 @@ export default function Dashboard() {
           <LoadingSpinner />
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 snap-x snap-mandatory sm:grid sm:grid-cols-3 sm:overflow-visible sm:mx-0 sm:px-0">
-            <StatCard label="Trip Revenue" value={formatCurrency(tripRevenue)} />
+            <StatCard label="Total Revenue" value={formatCurrency(totalRevenue)} accent />
+            <StatCard label="Total Bookings" value={totalBookings} />
+            <StatCard label="Tour Packages" value={tourPackageCount} />
             <StatCard label="Trip Costs" value={formatCurrency(tripCosts)} />
-            <StatCard label="Trip Profit" value={formatCurrency(tripProfitTotal)} accent />
             <StatCard label="Commissions" value={formatCurrency(commissionTotal)} />
             <StatCard label="Investment Returns" value={formatCurrency(investmentTotal)} />
-            <StatCard
-              label="Daily Net Profit"
-              value={formatCurrency(dailyNetProfit)}
-              accent
-              negative={dailyNetProfit < 0}
-            />
           </div>
         )}
       </section>
@@ -350,24 +345,6 @@ export default function Dashboard() {
           </div>
         </section>
       )}
-
-      {/* Daily Summary */}
-      <section className="card bg-teal/5 border-teal/20">
-        <p className="text-xs text-gray-500 mb-1">Daily Net Profit</p>
-        <p className={`font-display font-bold text-2xl ${dailyNetProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-          {formatCurrency(dailyNetProfit)}
-        </p>
-        <p className="text-xs text-gray-500 mt-2">
-          Trip Profit {formatCurrency(tripProfitTotal)} − Overhead {formatCurrency(overheadTotal)} + Commissions{' '}
-          {formatCurrency(commissionTotal)} + Investments {formatCurrency(investmentTotal)}
-          {(miscIncomeTotal > 0 || miscExpenseTotal > 0) && (
-            <>
-              {' '}
-              + Misc Income {formatCurrency(miscIncomeTotal)} − Misc Expense {formatCurrency(miscExpenseTotal)}
-            </>
-          )}
-        </p>
-      </section>
 
       {/* Modals */}
       <Modal open={showAddTrip} onClose={() => setShowAddTrip(false)} title="Add Trip">
