@@ -255,10 +255,6 @@ create table if not exists daily_overhead_expenses (
   -- matching the pump receipt, on whatever day it actually happens.
   fuel_liters numeric(10, 2),
   fuel_cost_per_liter numeric(10, 2),
-  -- Fuel is bought on a credit card and settled with the card company later,
-  -- separately from the trip/expense bookkeeping - track whether that card
-  -- charge has actually been paid off yet.
-  fuel_payment_status text not null default 'Pending' check (fuel_payment_status in ('Pending', 'Paid')),
   maintenance_cost numeric(12, 2) default 0,
   spare_parts_cost numeric(12, 2) default 0,
   washing_cost numeric(12, 2) default 0,
@@ -301,6 +297,51 @@ drop trigger if exists trg_investments_updated_at on investment_returns;
 create trigger trg_investments_updated_at before update on investment_returns
   for each row execute function set_updated_at();
 
+-- ----------------------------------------------------------------------------
+-- 9. daily_misc_entries — uncategorized day-end lump-sum expense/income, for
+--    days where itemizing into trips/commissions/overhead isn't worth it.
+-- ----------------------------------------------------------------------------
+
+create table if not exists daily_misc_entries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users(id),
+  date date not null default current_date,
+  misc_expense numeric(12, 2) not null default 0,
+  misc_income numeric(12, 2) not null default 0,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_misc_entries_user_id on daily_misc_entries(user_id);
+create index if not exists idx_misc_entries_date on daily_misc_entries(date);
+
+drop trigger if exists trg_misc_entries_updated_at on daily_misc_entries;
+create trigger trg_misc_entries_updated_at before update on daily_misc_entries
+  for each row execute function set_updated_at();
+
+-- ----------------------------------------------------------------------------
+-- 10. credit_card_payments — a running ledger of card payoffs, tagged by what
+--     they cover. Fuel is bought on the card and settled later, often as a
+--     partial payment that doesn't map 1:1 to any single fill-up, so this is
+--     a ledger (charges vs. payments) rather than a per-entry paid/pending
+--     flag on daily_overhead_expenses.
+-- ----------------------------------------------------------------------------
+
+create table if not exists credit_card_payments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users(id),
+  date date not null default current_date,
+  amount numeric(12, 2) not null default 0,
+  tag text not null default 'fuel' check (tag in ('fuel', 'other')),
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_card_payments_user_id on credit_card_payments(user_id);
+create index if not exists idx_card_payments_date on credit_card_payments(date);
+create index if not exists idx_card_payments_tag on credit_card_payments(tag);
+
 -- ============================================================================
 -- Row Level Security
 -- ============================================================================
@@ -313,6 +354,8 @@ alter table trips enable row level security;
 alter table commissions_received enable row level security;
 alter table daily_overhead_expenses enable row level security;
 alter table investment_returns enable row level security;
+alter table daily_misc_entries enable row level security;
+alter table credit_card_payments enable row level security;
 
 -- Small helper so policies read cleanly: is the current user the owner?
 create or replace function is_owner()
@@ -381,6 +424,25 @@ create policy "overhead_update_owner" on daily_overhead_expenses
 create policy "overhead_delete_owner" on daily_overhead_expenses
   for delete using (is_owner());
 
+-- daily_misc_entries / credit_card_payments: owner-managed, same as overhead.
+create policy "misc_entries_select_all" on daily_misc_entries
+  for select using (auth.role() = 'authenticated');
+create policy "misc_entries_insert_owner" on daily_misc_entries
+  for insert with check (is_owner());
+create policy "misc_entries_update_owner" on daily_misc_entries
+  for update using (is_owner());
+create policy "misc_entries_delete_owner" on daily_misc_entries
+  for delete using (is_owner());
+
+create policy "card_payments_select_all" on credit_card_payments
+  for select using (auth.role() = 'authenticated');
+create policy "card_payments_insert_owner" on credit_card_payments
+  for insert with check (is_owner());
+create policy "card_payments_update_owner" on credit_card_payments
+  for update using (is_owner());
+create policy "card_payments_delete_owner" on credit_card_payments
+  for delete using (is_owner());
+
 -- ============================================================================
 -- Realtime
 -- ============================================================================
@@ -392,6 +454,8 @@ alter publication supabase_realtime add table daily_overhead_expenses;
 alter publication supabase_realtime add table itineraries;
 alter publication supabase_realtime add table hotels_houseboats;
 alter publication supabase_realtime add table drivers;
+alter publication supabase_realtime add table daily_misc_entries;
+alter publication supabase_realtime add table credit_card_payments;
 
 -- ============================================================================
 -- After running this file:

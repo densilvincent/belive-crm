@@ -3,6 +3,7 @@ import { useTrips } from '../hooks/useTrips'
 import { useCommissions } from '../hooks/useCommissions'
 import { useInvestments } from '../hooks/useInvestments'
 import { useOverhead } from '../hooks/useOverhead'
+import { useMiscEntries } from '../hooks/useMiscEntries'
 import { useDrivers } from '../hooks/useDrivers'
 import { startOfMonthISO, endOfMonthISO } from '../lib/formatters'
 import DateRangePicker from '../components/common/DateRangePicker'
@@ -35,13 +36,15 @@ export default function Reports() {
   const { data: investments, loading: l3 } = useInvestments()
   const { data: overheads, loading: l4 } = useOverhead()
   const { data: drivers, loading: l5 } = useDrivers()
+  const { data: miscEntries, loading: l6 } = useMiscEntries()
 
-  const loading = l1 || l2 || l3 || l4 || l5
+  const loading = l1 || l2 || l3 || l4 || l5 || l6
 
   const filteredTrips = useMemo(() => trips.filter((d) => d.date >= start && d.date <= end), [trips, start, end])
   const filteredCommissions = useMemo(() => commissions.filter((d) => d.date >= start && d.date <= end), [commissions, start, end])
   const filteredInvestments = useMemo(() => investments.filter((d) => d.date >= start && d.date <= end), [investments, start, end])
   const filteredOverheads = useMemo(() => overheads.filter((d) => d.date >= start && d.date <= end), [overheads, start, end])
+  const filteredMisc = useMemo(() => miscEntries.filter((d) => d.date >= start && d.date <= end), [miscEntries, start, end])
 
   return (
     <div className="space-y-4">
@@ -67,17 +70,41 @@ export default function Reports() {
       ) : (
         <>
           {tab === 'daily' && (
-            <DailyProfitReport trips={filteredTrips} overheads={filteredOverheads} commissions={filteredCommissions} investments={filteredInvestments} start={start} end={end} />
+            <DailyProfitReport
+              trips={filteredTrips}
+              overheads={filteredOverheads}
+              commissions={filteredCommissions}
+              investments={filteredInvestments}
+              miscEntries={filteredMisc}
+              start={start}
+              end={end}
+            />
           )}
           {tab === 'weekly' && (
-            <WeeklyProfitReport trips={filteredTrips} overheads={filteredOverheads} commissions={filteredCommissions} investments={filteredInvestments} start={start} end={end} />
+            <WeeklyProfitReport
+              trips={filteredTrips}
+              overheads={filteredOverheads}
+              commissions={filteredCommissions}
+              investments={filteredInvestments}
+              miscEntries={filteredMisc}
+              start={start}
+              end={end}
+            />
           )}
           {tab === 'trip-type' && <TripProfitabilityReport trips={filteredTrips} start={start} end={end} />}
           {tab === 'driver' && <DriverCommissionReport trips={filteredTrips} drivers={drivers} start={start} end={end} />}
           {tab === 'expense' && <ExpenseBreakdownReport overheads={filteredOverheads} start={start} end={end} />}
           {tab === 'commission' && <CommissionSourceReport commissions={filteredCommissions} start={start} end={end} />}
           {tab === 'pl' && (
-            <ConsolidatedPLReport trips={filteredTrips} overheads={filteredOverheads} commissions={filteredCommissions} investments={filteredInvestments} start={start} end={end} />
+            <ConsolidatedPLReport
+              trips={filteredTrips}
+              overheads={filteredOverheads}
+              commissions={filteredCommissions}
+              investments={filteredInvestments}
+              miscEntries={filteredMisc}
+              start={start}
+              end={end}
+            />
           )}
         </>
       )}

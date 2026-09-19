@@ -5,6 +5,8 @@ import { useTrips } from '../hooks/useTrips'
 import { useCommissions } from '../hooks/useCommissions'
 import { useInvestments } from '../hooks/useInvestments'
 import { useOverhead } from '../hooks/useOverhead'
+import { useMiscEntries } from '../hooks/useMiscEntries'
+import { useCreditCardPayments } from '../hooks/useCreditCardPayments'
 import { useDrivers } from '../hooks/useDrivers'
 import { useHotels } from '../hooks/useHotels'
 import { useItineraries } from '../hooks/useItineraries'
@@ -22,6 +24,8 @@ import ConfirmTripForm from '../components/forms/ConfirmTripForm'
 import CommissionForm from '../components/forms/CommissionForm'
 import InvestmentForm from '../components/forms/InvestmentForm'
 import OverheadForm from '../components/forms/OverheadForm'
+import MiscEntryForm from '../components/forms/MiscEntryForm'
+import CreditCardPaymentForm from '../components/forms/CreditCardPaymentForm'
 
 export default function Dashboard() {
   const { isOwner } = useAuth()
@@ -31,6 +35,8 @@ export default function Dashboard() {
   const { data: commissions, loading: commLoading } = useCommissions()
   const { data: investments, loading: invLoading } = useInvestments()
   const { data: overheads, loading: ovLoading } = useOverhead()
+  const { data: miscEntries, loading: miscLoading } = useMiscEntries()
+  const { data: cardPayments } = useCreditCardPayments()
   const { data: drivers } = useDrivers()
   const { data: hotels } = useHotels()
   const { data: itineraries } = useItineraries()
@@ -39,6 +45,8 @@ export default function Dashboard() {
   const [showAddCommission, setShowAddCommission] = useState(false)
   const [showAddInvestment, setShowAddInvestment] = useState(false)
   const [showAddOverhead, setShowAddOverhead] = useState(false)
+  const [showAddMisc, setShowAddMisc] = useState(false)
+  const [showPayCard, setShowPayCard] = useState(false)
   const [confirmingTrip, setConfirmingTrip] = useState(null)
   const [cancelTrip, setCancelTrip] = useState(null)
   const [generatingPdfId, setGeneratingPdfId] = useState(null)
@@ -48,6 +56,7 @@ export default function Dashboard() {
   const todaysCommissions = useMemo(() => commissions.filter((c) => c.date === date), [commissions, date])
   const todaysInvestments = useMemo(() => investments.filter((i) => i.date === date), [investments, date])
   const todaysOverhead = useMemo(() => overheads.filter((o) => o.date === date), [overheads, date])
+  const todaysMisc = useMemo(() => miscEntries.filter((m) => m.date === date), [miscEntries, date])
 
   const quotedTrips = todaysTrips.filter((t) => ['Quote-Generated', 'Quote-Sent'].includes(t.trip_status))
   const activeTrips = todaysTrips.filter((t) => ['Quote-Confirmed', 'Booked', 'Paid'].includes(t.trip_status))
@@ -58,12 +67,21 @@ export default function Dashboard() {
   const commissionTotal = sum(todaysCommissions, (c) => c.commission_amount)
   const investmentTotal = sum(todaysInvestments, (i) => i.actual_amount_received)
   const overheadTotal = sum(todaysOverhead, dailyOverheadTotal)
-  const dailyNetProfit = tripProfitTotal - overheadTotal + commissionTotal + investmentTotal
-  // Card balance, not scoped to the selected day — fuel bought on credit
-  // stays "pending" until the card bill is actually paid off.
-  const pendingFuelTotal = sum(
-    overheads.filter((o) => o.fuel_payment_status === 'Pending'),
-    fuelCost
+  const miscExpenseTotal = sum(todaysMisc, (m) => m.misc_expense)
+  const miscIncomeTotal = sum(todaysMisc, (m) => m.misc_income)
+  const dailyNetProfit =
+    tripProfitTotal - overheadTotal + commissionTotal + investmentTotal + miscIncomeTotal - miscExpenseTotal
+  // Card balance, not scoped to the selected day — total fuel ever charged
+  // minus total ever paid toward it, since fuel stays "pending" on the card
+  // until it's actually paid off, and a payment can be partial or cover
+  // several fill-ups at once.
+  const pendingFuelTotal = Math.max(
+    0,
+    sum(overheads, fuelCost) -
+      sum(
+        cardPayments.filter((p) => p.tag === 'fuel'),
+        (p) => p.amount
+      )
   )
 
   const driverById = (id) => drivers.find((d) => d.id === id)
@@ -146,7 +164,7 @@ export default function Dashboard() {
     }
   }
 
-  const loading = tripsLoading || commLoading || invLoading || ovLoading
+  const loading = tripsLoading || commLoading || invLoading || ovLoading || miscLoading
 
   return (
     <div className="space-y-6">
@@ -185,6 +203,21 @@ export default function Dashboard() {
           <Icon name="plus" size={18} /> Add Commission
         </button>
       </section>
+
+      {/* Section B2: Owner-only financial quick actions */}
+      {isOwner && (
+        <section className="grid grid-cols-2 gap-2">
+          <button className="btn-outline" onClick={() => setShowAddOverhead(true)}>
+            <Icon name="plus" size={18} /> Add Expense
+          </button>
+          <button className="btn-outline" onClick={() => setShowAddMisc(true)}>
+            <Icon name="plus" size={18} /> Day-End Summary
+          </button>
+          <button className="btn-secondary col-span-2" onClick={() => setShowPayCard(true)}>
+            <Icon name="plus" size={18} /> Pay Credit Card
+          </button>
+        </section>
+      )}
 
       {/* Section C: Today's Tour Package Quotes */}
       <section>
@@ -300,6 +333,24 @@ export default function Dashboard() {
         </section>
       )}
 
+      {/* Section H: Day-End Summary entries (Owner only) */}
+      {isOwner && todaysMisc.length > 0 && (
+        <section>
+          <h2 className="font-display font-semibold text-base mb-2">Day-End Summary</h2>
+          <div className="space-y-2">
+            {todaysMisc.map((m) => (
+              <div key={m.id} className="card flex items-center justify-between">
+                <p className="text-sm text-gray-600">{m.notes || 'Overall expense/income'}</p>
+                <div className="text-right">
+                  {Number(m.misc_expense) > 0 && <p className="text-xs text-red-600">-{formatCurrency(m.misc_expense)}</p>}
+                  {Number(m.misc_income) > 0 && <p className="text-xs text-green-700">+{formatCurrency(m.misc_income)}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Daily Summary */}
       <section className="card bg-teal/5 border-teal/20">
         <p className="text-xs text-gray-500 mb-1">Daily Net Profit</p>
@@ -309,6 +360,12 @@ export default function Dashboard() {
         <p className="text-xs text-gray-500 mt-2">
           Trip Profit {formatCurrency(tripProfitTotal)} − Overhead {formatCurrency(overheadTotal)} + Commissions{' '}
           {formatCurrency(commissionTotal)} + Investments {formatCurrency(investmentTotal)}
+          {(miscIncomeTotal > 0 || miscExpenseTotal > 0) && (
+            <>
+              {' '}
+              + Misc Income {formatCurrency(miscIncomeTotal)} − Misc Expense {formatCurrency(miscExpenseTotal)}
+            </>
+          )}
         </p>
       </section>
 
@@ -323,9 +380,17 @@ export default function Dashboard() {
         <InvestmentForm onDone={() => setShowAddInvestment(false)} onCancel={() => setShowAddInvestment(false)} />
       </Modal>
       {isOwner && (
-        <Modal open={showAddOverhead} onClose={() => setShowAddOverhead(false)} title="Add Daily Overhead">
-          <OverheadForm onDone={() => setShowAddOverhead(false)} onCancel={() => setShowAddOverhead(false)} />
-        </Modal>
+        <>
+          <Modal open={showAddOverhead} onClose={() => setShowAddOverhead(false)} title="Add Daily Overhead">
+            <OverheadForm onDone={() => setShowAddOverhead(false)} onCancel={() => setShowAddOverhead(false)} />
+          </Modal>
+          <Modal open={showAddMisc} onClose={() => setShowAddMisc(false)} title="Day-End Summary">
+            <MiscEntryForm onDone={() => setShowAddMisc(false)} onCancel={() => setShowAddMisc(false)} />
+          </Modal>
+          <Modal open={showPayCard} onClose={() => setShowPayCard(false)} title="Pay Credit Card">
+            <CreditCardPaymentForm onDone={() => setShowPayCard(false)} onCancel={() => setShowPayCard(false)} />
+          </Modal>
+        </>
       )}
       <Modal open={!!confirmingTrip} onClose={() => setConfirmingTrip(null)} title="Confirm Quote">
         {confirmingTrip && (

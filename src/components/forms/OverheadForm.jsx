@@ -8,7 +8,6 @@ const emptyForm = {
   date: todayISO(),
   fuel_liters: '',
   fuel_cost_per_liter: '',
-  fuel_payment_status: 'Pending',
   maintenance_cost: '',
   spare_parts_cost: '',
   washing_cost: '',
@@ -26,7 +25,6 @@ export default function OverheadForm({ expense, onDone, onCancel }) {
           date: expense.date,
           fuel_liters: expense.fuel_liters ?? '',
           fuel_cost_per_liter: expense.fuel_cost_per_liter ?? '',
-          fuel_payment_status: expense.fuel_payment_status || 'Pending',
           maintenance_cost: expense.maintenance_cost ?? '',
           spare_parts_cost: expense.spare_parts_cost ?? '',
           washing_cost: expense.washing_cost ?? '',
@@ -49,7 +47,6 @@ export default function OverheadForm({ expense, onDone, onCancel }) {
         date: form.date,
         fuel_liters: form.fuel_liters === '' ? null : Number(form.fuel_liters),
         fuel_cost_per_liter: form.fuel_cost_per_liter === '' ? null : Number(form.fuel_cost_per_liter),
-        fuel_payment_status: form.fuel_payment_status,
         maintenance_cost: Number(form.maintenance_cost) || 0,
         spare_parts_cost: Number(form.spare_parts_cost) || 0,
         washing_cost: Number(form.washing_cost) || 0,
@@ -98,16 +95,10 @@ export default function OverheadForm({ expense, onDone, onCancel }) {
           </div>
         </div>
         {fuelTotal > 0 && (
-          <div className="mt-3">
-            <p className="text-xs text-gray-500 mb-2">
-              Total fuel cost: {formatCurrency(fuelTotal)} (charged to credit card)
-            </p>
-            <label className="label">Credit Card Payment Status</label>
-            <select className="input-field" value={form.fuel_payment_status} onChange={set('fuel_payment_status')}>
-              <option value="Pending">Pending — not yet paid to card</option>
-              <option value="Paid">Paid off</option>
-            </select>
-          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Total fuel cost: {formatCurrency(fuelTotal)} — charged to credit card. Use "Pay Credit Card" on the
+            Expenses page once you've settled it.
+          </p>
         )}
       </div>
 

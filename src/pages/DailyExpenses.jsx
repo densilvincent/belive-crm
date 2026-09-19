@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import toast from 'react-hot-toast'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useOverhead } from '../hooks/useOverhead'
+import { useCreditCardPayments } from '../hooks/useCreditCardPayments'
 import { formatCurrency, formatDate, startOfMonthISO, endOfMonthISO, exportToCSV } from '../lib/formatters'
 import { dailyOverheadTotal, fuelCost, sum } from '../lib/calc'
 import { CHART_COLORS } from '../lib/constants'
@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner'
 import Modal from '../components/common/Modal'
 import Icon from '../components/common/Icon'
 import OverheadForm from '../components/forms/OverheadForm'
+import CreditCardPaymentForm from '../components/forms/CreditCardPaymentForm'
 
 const CATEGORIES = [
   { label: 'Fuel', value: fuelCost },
@@ -22,11 +23,13 @@ const CATEGORIES = [
 ]
 
 export default function DailyExpenses() {
-  const { data: expenses, loading, update } = useOverhead()
+  const { data: expenses, loading } = useOverhead()
+  const { data: payments, loading: paymentsLoading } = useCreditCardPayments()
   const [start, setStart] = useState(startOfMonthISO())
   const [end, setEnd] = useState(endOfMonthISO())
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [payingCard, setPayingCard] = useState(false)
 
   const filtered = useMemo(
     () => expenses.filter((e) => e.date >= start && e.date <= end).sort((a, b) => (a.date < b.date ? 1 : -1)),
@@ -35,21 +38,18 @@ export default function DailyExpenses() {
 
   const monthlyTotal = sum(filtered, dailyOverheadTotal)
   const pieData = CATEGORIES.map((c) => ({ name: c.label, value: sum(filtered, c.value) })).filter((d) => d.value > 0)
-  // Card balance, not date-range-scoped — a fuel charge stays "pending" on
-  // the credit card until it's actually paid off, regardless of which month
-  // it was filled in.
-  const pendingFuelTotal = sum(
-    expenses.filter((e) => e.fuel_payment_status === 'Pending'),
-    fuelCost
-  )
 
-  const toggleFuelPaid = async (e) => {
-    try {
-      await update(e.id, { fuel_payment_status: e.fuel_payment_status === 'Paid' ? 'Pending' : 'Paid' })
-    } catch (err) {
-      toast.error(err.message)
-    }
-  }
+  // Running card balance, not date-range-scoped: total fuel ever charged
+  // minus total ever paid toward it. Partial payments don't map 1:1 to any
+  // single fill-up, so this is a ledger rather than a per-entry flag.
+  const totalFuelCharged = sum(expenses, fuelCost)
+  const totalFuelPaid = sum(
+    payments.filter((p) => p.tag === 'fuel'),
+    (p) => p.amount
+  )
+  const pendingFuelTotal = Math.max(0, totalFuelCharged - totalFuelPaid)
+
+  const recentPayments = useMemo(() => [...payments].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 5), [payments])
 
   const handleExport = () => {
     exportToCSV(
@@ -59,7 +59,6 @@ export default function DailyExpenses() {
         fuel_liters: e.fuel_liters,
         fuel_cost_per_liter: e.fuel_cost_per_liter,
         fuel_total: fuelCost(e),
-        fuel_payment_status: fuelCost(e) > 0 ? e.fuel_payment_status : '',
         maintenance: e.maintenance_cost,
         spare_parts: e.spare_parts_cost,
         washing: e.washing_cost,
@@ -106,10 +105,30 @@ export default function DailyExpenses() {
         <button className="btn-primary" onClick={() => setAdding(true)}>
           <Icon name="plus" size={16} /> Add Expense
         </button>
-        <button className="btn-outline" onClick={handleExport} disabled={filtered.length === 0}>
-          Export CSV
+        <button className="btn-secondary" onClick={() => setPayingCard(true)}>
+          <Icon name="plus" size={16} /> Pay Credit Card
         </button>
       </div>
+      <button className="btn-outline w-full" onClick={handleExport} disabled={filtered.length === 0}>
+        Export CSV
+      </button>
+
+      {!paymentsLoading && recentPayments.length > 0 && (
+        <div>
+          <h2 className="font-display font-semibold text-base mb-2">Recent Card Payments</h2>
+          <div className="card divide-y divide-gray-50">
+            {recentPayments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between py-2 text-sm">
+                <div>
+                  <p className="text-gray-700">{formatDate(p.date)}</p>
+                  <p className="text-xs text-gray-400 capitalize">{p.tag}</p>
+                </div>
+                <p className="font-bold text-teal">{formatCurrency(p.amount)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <LoadingSpinner />
@@ -123,23 +142,12 @@ export default function DailyExpenses() {
                 <p className="font-display font-semibold text-sm">{formatDate(e.date)}</p>
                 <p className="font-bold text-teal">{formatCurrency(dailyOverheadTotal(e))}</p>
               </div>
-              <p className="text-xs text-gray-400 mb-2">
+              <p className="text-xs text-gray-400">
                 {fuelCost(e) > 0 && <>Fuel {formatCurrency(fuelCost(e))} ({e.fuel_liters}L) · </>}
                 Maint {formatCurrency(e.maintenance_cost)} · Parts {formatCurrency(e.spare_parts_cost)} · Wash{' '}
                 {formatCurrency(e.washing_cost)} · Ins {formatCurrency(e.insurance_daily_allocation)} · Other{' '}
                 {formatCurrency(e.other_overhead)}
               </p>
-              {fuelCost(e) > 0 && (
-                <button
-                  onClick={(ev) => {
-                    ev.stopPropagation()
-                    toggleFuelPaid(e)
-                  }}
-                  className={`badge ${e.fuel_payment_status === 'Paid' ? 'bg-green-700' : 'bg-orange-500'}`}
-                >
-                  Fuel Card: {e.fuel_payment_status}
-                </button>
-              )}
             </div>
           ))}
         </div>
@@ -150,6 +158,9 @@ export default function DailyExpenses() {
       </Modal>
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit Expense">
         {editing && <OverheadForm expense={editing} onDone={() => setEditing(null)} onCancel={() => setEditing(null)} />}
+      </Modal>
+      <Modal open={payingCard} onClose={() => setPayingCard(false)} title="Pay Credit Card">
+        <CreditCardPaymentForm onDone={() => setPayingCard(false)} onCancel={() => setPayingCard(false)} />
       </Modal>
     </div>
   )

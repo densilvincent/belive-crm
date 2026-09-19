@@ -3,13 +3,23 @@ import { tripProfit, dailyOverheadTotal, weekKey } from '../../lib/calc'
 import { formatCurrency, exportToCSV } from '../../lib/formatters'
 import EmptyState from '../common/EmptyState'
 
-export default function WeeklyProfitReport({ trips, overheads, commissions, investments }) {
+export default function WeeklyProfitReport({ trips, overheads, commissions, investments, miscEntries = [] }) {
   const rows = useMemo(() => {
     const byWeek = new Map()
 
     const bucket = (dateStr) => {
       const { key, label } = weekKey(dateStr)
-      if (!byWeek.has(key)) byWeek.set(key, { key, label, tripProfitTotal: 0, overheadTotal: 0, commissionTotal: 0, investmentTotal: 0 })
+      if (!byWeek.has(key))
+        byWeek.set(key, {
+          key,
+          label,
+          tripProfitTotal: 0,
+          overheadTotal: 0,
+          commissionTotal: 0,
+          investmentTotal: 0,
+          miscExpenseTotal: 0,
+          miscIncomeTotal: 0,
+        })
       return byWeek.get(key)
     }
 
@@ -17,15 +27,23 @@ export default function WeeklyProfitReport({ trips, overheads, commissions, inve
     overheads.forEach((o) => (bucket(o.date).overheadTotal += dailyOverheadTotal(o)))
     commissions.forEach((c) => (bucket(c.date).commissionTotal += Number(c.commission_amount) || 0))
     investments.forEach((i) => (bucket(i.date).investmentTotal += Number(i.actual_amount_received) || 0))
+    miscEntries.forEach((m) => {
+      const b = bucket(m.date)
+      b.miscExpenseTotal += Number(m.misc_expense) || 0
+      b.miscIncomeTotal += Number(m.misc_income) || 0
+    })
 
     return [...byWeek.values()]
       .sort((a, b) => (a.key < b.key ? 1 : -1))
-      .map((w) => ({
-        ...w,
-        weeklyNetProfit: w.tripProfitTotal - w.overheadTotal,
-        totalIncome: w.tripProfitTotal - w.overheadTotal + w.commissionTotal + w.investmentTotal,
-      }))
-  }, [trips, overheads, commissions, investments])
+      .map((w) => {
+        const weeklyNetProfit = w.tripProfitTotal - w.overheadTotal - w.miscExpenseTotal
+        return {
+          ...w,
+          weeklyNetProfit,
+          totalIncome: weeklyNetProfit + w.commissionTotal + w.investmentTotal + w.miscIncomeTotal,
+        }
+      })
+  }, [trips, overheads, commissions, investments, miscEntries])
 
   const handleExport = () =>
     exportToCSV(
@@ -34,6 +52,8 @@ export default function WeeklyProfitReport({ trips, overheads, commissions, inve
         week: r.label,
         trip_profit: r.tripProfitTotal,
         daily_overhead: r.overheadTotal,
+        misc_expense: r.miscExpenseTotal,
+        misc_income: r.miscIncomeTotal,
         weekly_net_profit: r.weeklyNetProfit,
         total_income: r.totalIncome,
       }))
@@ -56,6 +76,14 @@ export default function WeeklyProfitReport({ trips, overheads, commissions, inve
                 <span className="text-right">{formatCurrency(w.tripProfitTotal)}</span>
                 <span>Daily Overhead</span>
                 <span className="text-right">{formatCurrency(w.overheadTotal)}</span>
+                {(w.miscExpenseTotal > 0 || w.miscIncomeTotal > 0) && (
+                  <>
+                    <span>Misc Expense</span>
+                    <span className="text-right">{formatCurrency(w.miscExpenseTotal)}</span>
+                    <span>Misc Income</span>
+                    <span className="text-right">{formatCurrency(w.miscIncomeTotal)}</span>
+                  </>
+                )}
                 <span className="font-bold text-gray-800">Weekly Net Profit</span>
                 <span className={`text-right font-bold ${w.weeklyNetProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                   {formatCurrency(w.weeklyNetProfit)}

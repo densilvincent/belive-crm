@@ -1,15 +1,17 @@
 import { tripCost, dailyOverheadTotal, sum } from '../../lib/calc'
 import { formatCurrency, exportToCSV } from '../../lib/formatters'
 
-export default function ConsolidatedPLReport({ trips, overheads, commissions, investments }) {
+export default function ConsolidatedPLReport({ trips, overheads, commissions, investments, miscEntries = [] }) {
   const tripRevenue = sum(trips, (t) => t.amount_received)
   const commissionIncome = sum(commissions, (c) => c.commission_amount)
   const investmentIncome = sum(investments, (i) => i.actual_amount_received)
-  const totalIncome = tripRevenue + commissionIncome + investmentIncome
+  const miscIncome = sum(miscEntries, (m) => m.misc_income)
+  const totalIncome = tripRevenue + commissionIncome + investmentIncome + miscIncome
 
   const tripCosts = sum(trips, tripCost)
   const overheadCosts = sum(overheads, dailyOverheadTotal)
-  const totalCosts = tripCosts + overheadCosts
+  const miscExpense = sum(miscEntries, (m) => m.misc_expense)
+  const totalCosts = tripCosts + overheadCosts + miscExpense
 
   const netProfit = totalIncome - totalCosts
 
@@ -17,9 +19,11 @@ export default function ConsolidatedPLReport({ trips, overheads, commissions, in
     { label: 'Trip Revenue', value: tripRevenue, section: 'Income' },
     { label: 'Commission Income', value: commissionIncome, section: 'Income' },
     { label: 'Investment Income', value: investmentIncome, section: 'Income' },
+    { label: 'Misc Income', value: miscIncome, section: 'Income' },
     { label: 'Total Income', value: totalIncome, section: 'Income', bold: true },
     { label: 'Trip Costs', value: tripCosts, section: 'Costs' },
     { label: 'Daily Overhead', value: overheadCosts, section: 'Costs' },
+    { label: 'Misc Expense', value: miscExpense, section: 'Costs' },
     { label: 'Total Costs', value: totalCosts, section: 'Costs', bold: true },
     { label: 'Net Profit', value: netProfit, section: 'Result', bold: true },
   ]

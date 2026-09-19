@@ -3,7 +3,7 @@ import { tripCost, tripProfit, dailyOverheadTotal, sum, groupBy } from '../../li
 import { formatCurrency, formatDate, exportToCSV } from '../../lib/formatters'
 import EmptyState from '../common/EmptyState'
 
-export default function DailyProfitReport({ trips, overheads, commissions, investments }) {
+export default function DailyProfitReport({ trips, overheads, commissions, investments, miscEntries = [] }) {
   const [expanded, setExpanded] = useState(null)
 
   const rows = useMemo(() => {
@@ -11,8 +11,15 @@ export default function DailyProfitReport({ trips, overheads, commissions, inves
     const overheadByDate = groupBy(overheads, (o) => o.date)
     const commByDate = groupBy(commissions, (c) => c.date)
     const invByDate = groupBy(investments, (i) => i.date)
+    const miscByDate = groupBy(miscEntries, (m) => m.date)
 
-    const dates = new Set([...tripsByDate.keys(), ...overheadByDate.keys(), ...commByDate.keys(), ...invByDate.keys()])
+    const dates = new Set([
+      ...tripsByDate.keys(),
+      ...overheadByDate.keys(),
+      ...commByDate.keys(),
+      ...invByDate.keys(),
+      ...miscByDate.keys(),
+    ])
 
     return [...dates]
       .sort((a, b) => (a < b ? 1 : -1))
@@ -21,23 +28,40 @@ export default function DailyProfitReport({ trips, overheads, commissions, inves
         const dayOverheads = overheadByDate.get(date) || []
         const dayComm = commByDate.get(date) || []
         const dayInv = invByDate.get(date) || []
+        const dayMisc = miscByDate.get(date) || []
         const tripRevenue = sum(dayTrips, (t) => t.amount_received)
         const tripCosts = sum(dayTrips, tripCost)
         const tripProfitTotal = sum(dayTrips, tripProfit)
         const overheadTotal = sum(dayOverheads, dailyOverheadTotal)
-        const dailyNetProfit = tripProfitTotal - overheadTotal
+        const miscExpenseTotal = sum(dayMisc, (m) => m.misc_expense)
+        const miscIncomeTotal = sum(dayMisc, (m) => m.misc_income)
+        const dailyNetProfit = tripProfitTotal - overheadTotal - miscExpenseTotal
         const commissionTotal = sum(dayComm, (c) => c.commission_amount)
         const investmentTotal = sum(dayInv, (i) => i.actual_amount_received)
-        const totalIncome = dailyNetProfit + commissionTotal + investmentTotal
-        return { date, tripRevenue, tripCosts, tripProfitTotal, overheadTotal, dailyNetProfit, commissionTotal, investmentTotal, totalIncome }
+        const totalIncome = dailyNetProfit + commissionTotal + investmentTotal + miscIncomeTotal
+        return {
+          date,
+          tripRevenue,
+          tripCosts,
+          tripProfitTotal,
+          overheadTotal,
+          miscExpenseTotal,
+          miscIncomeTotal,
+          dailyNetProfit,
+          commissionTotal,
+          investmentTotal,
+          totalIncome,
+        }
       })
-  }, [trips, overheads, commissions, investments])
+  }, [trips, overheads, commissions, investments, miscEntries])
 
   const monthly = {
     tripRevenue: sum(rows, (r) => r.tripRevenue),
     tripCosts: sum(rows, (r) => r.tripCosts),
     tripProfitTotal: sum(rows, (r) => r.tripProfitTotal),
     overheadTotal: sum(rows, (r) => r.overheadTotal),
+    miscExpenseTotal: sum(rows, (r) => r.miscExpenseTotal),
+    miscIncomeTotal: sum(rows, (r) => r.miscIncomeTotal),
     dailyNetProfit: sum(rows, (r) => r.dailyNetProfit),
     commissionTotal: sum(rows, (r) => r.commissionTotal),
     investmentTotal: sum(rows, (r) => r.investmentTotal),
@@ -53,6 +77,8 @@ export default function DailyProfitReport({ trips, overheads, commissions, inves
         trip_costs: r.tripCosts,
         trip_profit: r.tripProfitTotal,
         daily_overhead: r.overheadTotal,
+        misc_expense: r.miscExpenseTotal,
+        misc_income: r.miscIncomeTotal,
         daily_net_profit: r.dailyNetProfit,
         commissions: r.commissionTotal,
         investment: r.investmentTotal,
@@ -84,6 +110,12 @@ export default function DailyProfitReport({ trips, overheads, commissions, inves
                   <Line label="Trip Costs" value={r.tripCosts} />
                   <Line label="Trip Profit" value={r.tripProfitTotal} />
                   <Line label="Daily Overhead" value={r.overheadTotal} />
+                  {(r.miscExpenseTotal > 0 || r.miscIncomeTotal > 0) && (
+                    <>
+                      <Line label="Misc Expense" value={r.miscExpenseTotal} />
+                      <Line label="Misc Income" value={r.miscIncomeTotal} />
+                    </>
+                  )}
                   <Line label="Commissions" value={r.commissionTotal} />
                   <Line label="Investment" value={r.investmentTotal} />
                   <Line label="Total Income" value={r.totalIncome} bold />
@@ -100,6 +132,12 @@ export default function DailyProfitReport({ trips, overheads, commissions, inves
         <Line label="Trip Costs" value={monthly.tripCosts} />
         <Line label="Trip Profit" value={monthly.tripProfitTotal} />
         <Line label="Overhead" value={monthly.overheadTotal} />
+        {(monthly.miscExpenseTotal > 0 || monthly.miscIncomeTotal > 0) && (
+          <>
+            <Line label="Misc Expense" value={monthly.miscExpenseTotal} />
+            <Line label="Misc Income" value={monthly.miscIncomeTotal} />
+          </>
+        )}
         <Line label="Commissions" value={monthly.commissionTotal} />
         <Line label="Investment" value={monthly.investmentTotal} />
         <Line label="Total Income" value={monthly.totalIncome} bold />
