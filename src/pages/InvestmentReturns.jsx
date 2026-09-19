@@ -21,7 +21,19 @@ export default function InvestmentReturns() {
     [investments, start, end]
   )
 
-  const totalExpected = sum(filtered, (i) => i.expected_monthly_return)
+  // expected_monthly_return is a per-vehicle-per-month constant, not a
+  // per-transaction amount — a vehicle can have several actual-return
+  // entries within one month (partial payments, etc.), and naively summing
+  // the column across all of them would multiply-count that constant once
+  // per entry. Count it once per (vehicle, calendar month) instead.
+  const totalExpected = useMemo(() => {
+    const seen = new Map()
+    for (const i of filtered) {
+      const key = `${i.vehicle_name}|${i.date.slice(0, 7)}`
+      if (!seen.has(key)) seen.set(key, Number(i.expected_monthly_return) || 0)
+    }
+    return [...seen.values()].reduce((a, b) => a + b, 0)
+  }, [filtered])
   const totalReceived = sum(filtered, (i) => i.actual_amount_received)
   const outstanding = totalExpected - totalReceived
 
