@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useOverhead } from '../hooks/useOverhead'
 import { formatCurrency, formatDate, startOfMonthISO, endOfMonthISO, exportToCSV } from '../lib/formatters'
@@ -21,7 +22,7 @@ const CATEGORIES = [
 ]
 
 export default function DailyExpenses() {
-  const { data: expenses, loading } = useOverhead()
+  const { data: expenses, loading, update } = useOverhead()
   const [start, setStart] = useState(startOfMonthISO())
   const [end, setEnd] = useState(endOfMonthISO())
   const [adding, setAdding] = useState(false)
@@ -34,6 +35,21 @@ export default function DailyExpenses() {
 
   const monthlyTotal = sum(filtered, dailyOverheadTotal)
   const pieData = CATEGORIES.map((c) => ({ name: c.label, value: sum(filtered, c.value) })).filter((d) => d.value > 0)
+  // Card balance, not date-range-scoped — a fuel charge stays "pending" on
+  // the credit card until it's actually paid off, regardless of which month
+  // it was filled in.
+  const pendingFuelTotal = sum(
+    expenses.filter((e) => e.fuel_payment_status === 'Pending'),
+    fuelCost
+  )
+
+  const toggleFuelPaid = async (e) => {
+    try {
+      await update(e.id, { fuel_payment_status: e.fuel_payment_status === 'Paid' ? 'Pending' : 'Paid' })
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
 
   const handleExport = () => {
     exportToCSV(
@@ -43,6 +59,7 @@ export default function DailyExpenses() {
         fuel_liters: e.fuel_liters,
         fuel_cost_per_liter: e.fuel_cost_per_liter,
         fuel_total: fuelCost(e),
+        fuel_payment_status: fuelCost(e) > 0 ? e.fuel_payment_status : '',
         maintenance: e.maintenance_cost,
         spare_parts: e.spare_parts_cost,
         washing: e.washing_cost,
@@ -58,9 +75,15 @@ export default function DailyExpenses() {
       <h1 className="font-display font-bold text-xl">Daily Expenses</h1>
       <DateRangePicker start={start} end={end} onChange={(s, e) => { setStart(s); setEnd(e) }} />
 
-      <div className="card bg-teal/5 border-teal/20 text-center">
-        <p className="text-xs text-gray-400">Monthly Total</p>
-        <p className="font-display font-bold text-2xl text-teal">{formatCurrency(monthlyTotal)}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="card bg-teal/5 border-teal/20 text-center">
+          <p className="text-xs text-gray-400">Monthly Total</p>
+          <p className="font-display font-bold text-2xl text-teal">{formatCurrency(monthlyTotal)}</p>
+        </div>
+        <div className="card bg-orange-500/5 border-orange-500/20 text-center">
+          <p className="text-xs text-gray-400">Fuel Card Pending</p>
+          <p className="font-display font-bold text-2xl text-orange-600">{formatCurrency(pendingFuelTotal)}</p>
+        </div>
       </div>
 
       {pieData.length > 0 && (
@@ -100,12 +123,23 @@ export default function DailyExpenses() {
                 <p className="font-display font-semibold text-sm">{formatDate(e.date)}</p>
                 <p className="font-bold text-teal">{formatCurrency(dailyOverheadTotal(e))}</p>
               </div>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-400 mb-2">
                 {fuelCost(e) > 0 && <>Fuel {formatCurrency(fuelCost(e))} ({e.fuel_liters}L) · </>}
                 Maint {formatCurrency(e.maintenance_cost)} · Parts {formatCurrency(e.spare_parts_cost)} · Wash{' '}
                 {formatCurrency(e.washing_cost)} · Ins {formatCurrency(e.insurance_daily_allocation)} · Other{' '}
                 {formatCurrency(e.other_overhead)}
               </p>
+              {fuelCost(e) > 0 && (
+                <button
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    toggleFuelPaid(e)
+                  }}
+                  className={`badge ${e.fuel_payment_status === 'Paid' ? 'bg-green-700' : 'bg-orange-500'}`}
+                >
+                  Fuel Card: {e.fuel_payment_status}
+                </button>
+              )}
             </div>
           ))}
         </div>

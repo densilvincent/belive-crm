@@ -8,7 +8,7 @@ import { useOverhead } from '../hooks/useOverhead'
 import { useDrivers } from '../hooks/useDrivers'
 import { useHotels } from '../hooks/useHotels'
 import { useItineraries } from '../hooks/useItineraries'
-import { tripCost, tripProfit, dailyOverheadTotal, sum } from '../lib/calc'
+import { tripCost, tripProfit, dailyOverheadTotal, fuelCost, sum } from '../lib/calc'
 import { formatCurrency, todayISO } from '../lib/formatters'
 import StatusBadge from '../components/common/StatusBadge'
 import ProfitBadge from '../components/common/ProfitBadge'
@@ -59,6 +59,12 @@ export default function Dashboard() {
   const investmentTotal = sum(todaysInvestments, (i) => i.actual_amount_received)
   const overheadTotal = sum(todaysOverhead, dailyOverheadTotal)
   const dailyNetProfit = tripProfitTotal - overheadTotal + commissionTotal + investmentTotal
+  // Card balance, not scoped to the selected day — fuel bought on credit
+  // stays "pending" until the card bill is actually paid off.
+  const pendingFuelTotal = sum(
+    overheads.filter((o) => o.fuel_payment_status === 'Pending'),
+    fuelCost
+  )
 
   const driverById = (id) => drivers.find((d) => d.id === id)
   const hotelById = (id) => hotels.find((h) => h.id === id)
@@ -273,6 +279,12 @@ export default function Dashboard() {
               <Icon name="plus" size={14} /> Add
             </button>
           </div>
+          {pendingFuelTotal > 0 && (
+            <div className="card bg-orange-500/5 border-orange-500/20 flex items-center justify-between mb-2">
+              <p className="text-sm text-gray-600">Fuel Card Pending</p>
+              <p className="font-bold text-orange-600">{formatCurrency(pendingFuelTotal)}</p>
+            </div>
+          )}
           {todaysOverhead.length === 0 ? (
             <EmptyState title="No overhead logged today" />
           ) : (

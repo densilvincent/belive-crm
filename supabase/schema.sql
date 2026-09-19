@@ -255,6 +255,10 @@ create table if not exists daily_overhead_expenses (
   -- matching the pump receipt, on whatever day it actually happens.
   fuel_liters numeric(10, 2),
   fuel_cost_per_liter numeric(10, 2),
+  -- Fuel is bought on a credit card and settled with the card company later,
+  -- separately from the trip/expense bookkeeping - track whether that card
+  -- charge has actually been paid off yet.
+  fuel_payment_status text not null default 'Pending' check (fuel_payment_status in ('Pending', 'Paid')),
   maintenance_cost numeric(12, 2) default 0,
   spare_parts_cost numeric(12, 2) default 0,
   washing_cost numeric(12, 2) default 0,
