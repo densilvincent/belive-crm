@@ -147,18 +147,18 @@ create table if not exists trips (
   customer_email text,
   trip_type text not null check (trip_type in ('1-on-1-cab', 'tour-package', 'overflow-referral', 'other')),
   itinerary_id uuid references itineraries(id),
-  amount_quoted numeric(12, 2) default 0,
-  amount_received numeric(12, 2) default 0,
+  amount_quoted numeric(12, 2) default 0 check (amount_quoted >= 0),
+  amount_received numeric(12, 2) default 0 check (amount_received >= 0),
   payment_status text not null default 'Unpaid' check (payment_status in ('Unpaid', 'Partial', 'Paid', 'Cancelled')),
   trip_status text not null default 'Quote-Generated' check (
     trip_status in ('Quote-Generated', 'Quote-Sent', 'Quote-Confirmed', 'Booked', 'Paid', 'Cancelled')
   ),
   driver_assigned uuid references drivers(id),
-  driver_commission numeric(12, 2),
+  driver_commission numeric(12, 2) check (driver_commission >= 0),
   hotel_assigned uuid references hotels_houseboats(id),
   houseboat_assigned uuid references hotels_houseboats(id),
-  cab_rental_charge numeric(12, 2),
-  external_driver_charge numeric(12, 2),
+  cab_rental_charge numeric(12, 2) check (cab_rental_charge >= 0),
+  external_driver_charge numeric(12, 2) check (external_driver_charge >= 0),
   notes text,
   pdf_quote_generated boolean not null default false,
   pdf_quote_sent_date timestamptz,
@@ -210,7 +210,7 @@ create table if not exists commissions_received (
     commission_type in ('hotel', 'houseboat', 'overflow-referral', 'airbnb', 'trivago', 'booking.com', 'other-operator', 'other')
   ),
   operator_or_source text,
-  commission_amount numeric(12, 2) not null default 0,
+  commission_amount numeric(12, 2) not null default 0 check (commission_amount >= 0),
   payment_status text not null default 'Pending' check (payment_status in ('Received', 'Pending')),
   trip_id uuid references trips(id),
   notes text,
@@ -253,13 +253,13 @@ create table if not exists daily_overhead_expenses (
   -- A refuel doesn't happen per trip (a full tank covers several short
   -- trips, or 1-2 long ones) - it's billed as liters x price/liter,
   -- matching the pump receipt, on whatever day it actually happens.
-  fuel_liters numeric(10, 2),
-  fuel_cost_per_liter numeric(10, 2),
-  maintenance_cost numeric(12, 2) default 0,
-  spare_parts_cost numeric(12, 2) default 0,
-  washing_cost numeric(12, 2) default 0,
-  insurance_daily_allocation numeric(12, 2) default 0,
-  other_overhead numeric(12, 2) default 0,
+  fuel_liters numeric(10, 2) check (fuel_liters >= 0),
+  fuel_cost_per_liter numeric(10, 2) check (fuel_cost_per_liter >= 0),
+  maintenance_cost numeric(12, 2) default 0 check (maintenance_cost >= 0),
+  spare_parts_cost numeric(12, 2) default 0 check (spare_parts_cost >= 0),
+  washing_cost numeric(12, 2) default 0 check (washing_cost >= 0),
+  insurance_daily_allocation numeric(12, 2) default 0 check (insurance_daily_allocation >= 0),
+  other_overhead numeric(12, 2) default 0 check (other_overhead >= 0),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -281,8 +281,11 @@ create table if not exists investment_returns (
   user_id uuid references public.users(id),
   date date not null default current_date,
   vehicle_name text not null,
-  expected_monthly_return numeric(12, 2) default 0,
-  actual_amount_received numeric(12, 2) default 0,
+  -- Investment returns are always positive - an underperforming vehicle
+  -- shows up as actual < expected (visible as "Outstanding"), never as a
+  -- negative actual amount.
+  expected_monthly_return numeric(12, 2) default 0 check (expected_monthly_return >= 0),
+  actual_amount_received numeric(12, 2) default 0 check (actual_amount_received >= 0),
   payment_status text not null default 'Pending' check (payment_status in ('Received', 'Pending')),
   notes text,
   created_at timestamptz not null default now(),
@@ -306,8 +309,11 @@ create table if not exists daily_misc_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.users(id),
   date date not null default current_date,
-  misc_expense numeric(12, 2) not null default 0,
-  misc_income numeric(12, 2) not null default 0,
+  -- Income and expense are always separate non-negative amounts, never a
+  -- single signed figure - a refund/credit is recorded by reducing the
+  -- expense side, not by going negative.
+  misc_expense numeric(12, 2) not null default 0 check (misc_expense >= 0),
+  misc_income numeric(12, 2) not null default 0 check (misc_income >= 0),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -332,7 +338,7 @@ create table if not exists credit_card_payments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.users(id),
   date date not null default current_date,
-  amount numeric(12, 2) not null default 0,
+  amount numeric(12, 2) not null default 0 check (amount >= 0),
   tag text not null default 'fuel' check (tag in ('fuel', 'other')),
   notes text,
   created_at timestamptz not null default now()
