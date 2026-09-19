@@ -1,3 +1,10 @@
+// Belive Holidays operates in Kerala — every "today" / "this month" / "this
+// week" the app computes is anchored to Indian Standard Time explicitly,
+// not to whatever timezone the viewing device happens to be set to. Without
+// this, someone checking the dashboard while traveling would see a
+// different "today" than the business actually has.
+const BUSINESS_TIMEZONE = 'Asia/Kolkata'
+
 export function formatCurrency(amount) {
   const n = Number(amount) || 0
   return new Intl.NumberFormat('en-IN', {
@@ -23,54 +30,104 @@ export function formatDateTime(dateStr) {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
   if (Number.isNaN(d.getTime())) return dateStr
-  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  // A real timestamp (createdAt, last_sign_in_at) has a genuine instant, so
+  // this DOES need an explicit timezone — pin it to IST rather than the
+  // viewer's device, same reasoning as BUSINESS_TIMEZONE above.
+  return d.toLocaleString('en-IN', {
+    timeZone: BUSINESS_TIMEZONE,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
-// Reads a Date object's LOCAL year/month/day (never through toISOString,
-// which converts to UTC first and silently shifts the date by a day for any
-// timezone ahead of UTC, e.g. IST — exactly the bug this used to have).
-function toLocalISODate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+// Today's Y/M/D as seen in IST, regardless of the viewing device's own
+// timezone setting.
+function nowInBusinessTZ() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]))
+  return { year: Number(map.year), month: Number(map.month), day: Number(map.day) }
+}
+
+function pad(n) {
+  return String(n).padStart(2, '0')
+}
+
+function ymdToISO(year, month, day) {
+  return `${year}-${pad(month)}-${pad(day)}`
+}
+
+// Pure calendar arithmetic on Y/M/D integers, anchored to UTC noon purely as
+// a calculator (never as "now") so it can never pick up a stray local-
+// timezone offset from the runtime.
+function addDaysToYMD(year, month, day, deltaDays) {
+  const d = new Date(Date.UTC(year, month - 1, day + deltaDays, 12))
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() }
+}
+
+function dayOfWeekUTC(year, month, day) {
+  return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay() // 0 = Sunday
+}
+
+function mondayOfYMD(year, month, day) {
+  const diffFromMonday = (dayOfWeekUTC(year, month, day) + 6) % 7
+  return addDaysToYMD(year, month, day, -diffFromMonday)
 }
 
 export function todayISO() {
-  return toLocalISODate(new Date())
+  const { year, month, day } = nowInBusinessTZ()
+  return ymdToISO(year, month, day)
 }
 
-export function startOfMonthISO(date = new Date()) {
-  return toLocalISODate(new Date(date.getFullYear(), date.getMonth(), 1))
+export function startOfMonthISO() {
+  const { year, month } = nowInBusinessTZ()
+  return ymdToISO(year, month, 1)
 }
 
-export function endOfMonthISO(date = new Date()) {
-  return toLocalISODate(new Date(date.getFullYear(), date.getMonth() + 1, 0))
+export function endOfMonthISO() {
+  const { year, month } = nowInBusinessTZ()
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const lastDay = addDaysToYMD(nextYear, nextMonth, 1, -1)
+  return ymdToISO(lastDay.year, lastDay.month, lastDay.day)
 }
 
 export function lastMonthRange() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const end = new Date(now.getFullYear(), now.getMonth(), 0)
-  return { start: toLocalISODate(start), end: toLocalISODate(end) }
-}
-
-function mondayOf(date) {
-  const day = (date.getDay() + 6) % 7 // 0 = Monday
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate() - day)
+  const { year, month } = nowInBusinessTZ()
+  const prevMonth = month === 1 ? 12 : month - 1
+  const prevYear = month === 1 ? year - 1 : year
+  const nextMonth = prevMonth === 12 ? 1 : prevMonth + 1
+  const nextYear = prevMonth === 12 ? prevYear + 1 : prevYear
+  const lastDay = addDaysToYMD(nextYear, nextMonth, 1, -1)
+  return { start: ymdToISO(prevYear, prevMonth, 1), end: ymdToISO(lastDay.year, lastDay.month, lastDay.day) }
 }
 
 export function thisWeekRange() {
-  const monday = mondayOf(new Date())
-  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
-  return { start: toLocalISODate(monday), end: toLocalISODate(sunday) }
+  const { year, month, day } = nowInBusinessTZ()
+  const monday = mondayOfYMD(year, month, day)
+  const sunday = addDaysToYMD(monday.year, monday.month, monday.day, 6)
+  return {
+    start: ymdToISO(monday.year, monday.month, monday.day),
+    end: ymdToISO(sunday.year, sunday.month, sunday.day),
+  }
 }
 
 export function lastWeekRange() {
-  const thisMonday = mondayOf(new Date())
-  const lastMonday = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 7)
-  const lastSunday = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - 1)
-  return { start: toLocalISODate(lastMonday), end: toLocalISODate(lastSunday) }
+  const { year, month, day } = nowInBusinessTZ()
+  const monday = mondayOfYMD(year, month, day)
+  const lastMonday = addDaysToYMD(monday.year, monday.month, monday.day, -7)
+  const lastSunday = addDaysToYMD(monday.year, monday.month, monday.day, -1)
+  return {
+    start: ymdToISO(lastMonday.year, lastMonday.month, lastMonday.day),
+    end: ymdToISO(lastSunday.year, lastSunday.month, lastSunday.day),
+  }
 }
 
 export function exportToCSV(filename, rows) {
